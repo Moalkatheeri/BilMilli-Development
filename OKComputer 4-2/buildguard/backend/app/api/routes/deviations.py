@@ -3,6 +3,7 @@ Deviations API - Pillar 4: Deviation Detection
 Compares actual vs expected positions from 3D model.
 """
 
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
@@ -16,6 +17,8 @@ from app.schemas.deviation import (
     DeviationReviewRequest, DeviationReviewResponse,
     DeviationRectifyRequest, PositionCheckRequest, PositionCheckResponse
 )
+from app.core.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -23,7 +26,8 @@ router = APIRouter()
 @router.post("/check-position", response_model=PositionCheckResponse)
 async def check_position_deviation(
     request: PositionCheckRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Check for position deviation and create event if outside tolerance."""
     detector = DeviationDetector(db)
@@ -38,9 +42,7 @@ async def check_position_deviation(
         photo_id=request.photo_id,
         detected_by="system"
     )
-    
-    await db.commit()
-    
+
     return PositionCheckResponse(
         has_deviation=has_deviation,
         deviation_mm=deviation.position_deviation_mm if deviation else 0,
@@ -57,7 +59,8 @@ async def list_deviations(
     project_id: str,
     severity: Optional[List[str]] = None,
     status: Optional[List[str]] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """List all deviations for a project with optional filtering."""
     query = select(DeviationEvent).where(DeviationEvent.project_id == project_id)
@@ -87,7 +90,8 @@ async def list_deviations(
 async def get_critical_deviations(
     project_id: str,
     include_major: bool = True,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get critical (and optionally major) unresolved deviations."""
     detector = DeviationDetector(db)
@@ -115,7 +119,8 @@ async def get_critical_deviations(
 @router.get("/{deviation_id}", response_model=DeviationResponse)
 async def get_deviation(
     deviation_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get deviation details."""
     result = await db.execute(
@@ -133,7 +138,8 @@ async def get_deviation(
 async def accept_deviation(
     deviation_id: str,
     request: DeviationReviewRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Accept a deviation (no rectification needed)."""
     detector = DeviationDetector(db)
@@ -145,9 +151,7 @@ async def accept_deviation(
     
     if not success:
         raise HTTPException(status_code=404, detail="Deviation not found")
-    
-    await db.commit()
-    
+
     return DeviationReviewResponse(
         success=True,
         message="Deviation accepted",
@@ -159,7 +163,8 @@ async def accept_deviation(
 async def reject_deviation(
     deviation_id: str,
     request: DeviationReviewRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Reject a deviation (requires rectification)."""
     detector = DeviationDetector(db)
@@ -171,9 +176,7 @@ async def reject_deviation(
     
     if not success:
         raise HTTPException(status_code=404, detail="Deviation not found")
-    
-    await db.commit()
-    
+
     return DeviationReviewResponse(
         success=True,
         message="Deviation rejected - rectification required",
@@ -185,7 +188,8 @@ async def reject_deviation(
 async def mark_rectified(
     deviation_id: str,
     request: DeviationRectifyRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Mark a deviation as rectified."""
     detector = DeviationDetector(db)
@@ -197,9 +201,7 @@ async def mark_rectified(
     
     if not success:
         raise HTTPException(status_code=404, detail="Deviation not found")
-    
-    await db.commit()
-    
+
     return {
         "success": True,
         "message": "Deviation marked as rectified",
@@ -207,10 +209,51 @@ async def mark_rectified(
     }
 
 
+@router.patch("/{deviation_id}")
+async def update_deviation(
+    deviation_id: str,
+    request: DeviationReviewRequest,
+    status_update: str = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update deviation status, review notes, or rectification notes."""
+    result = await db.execute(
+        select(DeviationEvent).where(DeviationEvent.id == deviation_id)
+    )
+    deviation = result.scalar_one_or_none()
+
+    if not deviation:
+        raise HTTPException(status_code=404, detail="Deviation not found")
+
+    # Update notes
+    if request.notes:
+        deviation.review_notes = request.notes
+
+    # Update status if provided
+    if status_update:
+        try:
+            new_status = DeviationStatus(status_update)
+            deviation.status = new_status
+            if new_status == DeviationStatus.ACCEPTED:
+                deviation.reviewed_at = datetime.utcnow()
+            elif new_status == DeviationStatus.REJECTED:
+                deviation.reviewed_at = datetime.utcnow()
+            elif new_status == DeviationStatus.RECTIFIED:
+                deviation.rectified_at = datetime.utcnow()
+            elif new_status == DeviationStatus.CLOSED:
+                deviation.closed_at = datetime.utcnow()
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status_update}")
+
+    return {"success": True, "message": "Deviation updated", "deviation_id": deviation_id}
+
+
 @router.get("/project/{project_id}/summary")
 async def get_deviation_summary(
     project_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get deviation summary for a project."""
     result = await db.execute(

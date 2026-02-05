@@ -13,17 +13,40 @@ import { ContractorScorecard } from '@/sections/ContractorScorecard';
 import { ProjectWizard } from '@/sections/ProjectWizard';
 import { ModelUploader } from '@/sections/ModelUploader';
 import { FloorPlanAnalyzer } from '@/sections/FloorPlanAnalyzer';
+import { LoginPage } from '@/sections/LoginPage';
+import { ProjectSelector } from '@/sections/ProjectSelector';
 import { Loader2 } from 'lucide-react';
+import { Toaster } from 'sonner';
 
 function App() {
-  const { project, loading, activeTab, loadDemoData } = useProjectStore();
+  const { project, loading, activeTab, isAuthenticated, checkAuth } = useProjectStore();
 
   useEffect(() => {
-    // Load demo data on mount
-    loadDemoData();
-  }, [loadDemoData]);
+    checkAuth();
+  }, [checkAuth]);
 
-  if (loading) {
+  // Not authenticated - show login
+  if (!isAuthenticated) {
+    return (
+      <>
+        <LoginPage />
+        <Toaster position="top-right" richColors />
+      </>
+    );
+  }
+
+  // Authenticated but no project selected - show project selector
+  if (!project && activeTab !== 'new-project') {
+    return (
+      <>
+        <Header />
+        <ProjectSelector />
+        <Toaster position="top-right" richColors />
+      </>
+    );
+  }
+
+  if (loading && !project) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <motion.div
@@ -45,7 +68,8 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-50">
       <Header />
-      
+      <Toaster position="top-right" richColors />
+
       {isFullPage ? (
         // Full page view (no sidebar)
         <main className="pt-16 min-h-screen">

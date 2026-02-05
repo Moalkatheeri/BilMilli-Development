@@ -5,10 +5,11 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: buildguard-postgres
+    env_file: .env
     environment:
-      POSTGRES_USER: buildguard
-      POSTGRES_PASSWORD: buildguard
-      POSTGRES_DB: buildguard
+      POSTGRES_USER: ${POSTGRES_USER:-buildguard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-buildguard}
+      POSTGRES_DB: ${POSTGRES_DB:-buildguard}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -38,8 +39,8 @@ services:
     image: minio/minio:latest
     container_name: buildguard-minio
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -52,7 +53,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Create MinIO bucket
+  # Create MinIO bucket (authenticated access only - no public policy)
   minio-create-bucket:
     image: minio/mc:latest
     depends_on:
@@ -60,9 +61,8 @@ services:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc alias set myminio http://minio:9000 $${MINIO_ACCESS_KEY:-minioadmin} $${MINIO_SECRET_KEY:-minioadmin};
       /usr/bin/mc mb myminio/buildguard || true;
-      /usr/bin/mc policy set public myminio/buildguard || true;
       exit 0;
       "
 
@@ -70,17 +70,19 @@ services:
   backend:
     build: ./backend
     container_name: buildguard-backend
+    env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://buildguard:buildguard@postgres:5432/buildguard
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-buildguard}:${POSTGRES_PASSWORD:-buildguard}@postgres:5432/${POSTGRES_DB:-buildguard}
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       MINIO_BUCKET: buildguard
       MINIO_SECURE: "false"
       REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: your-secret-key-change-in-production
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
       APP_NAME: BuildGuard Pro
-      DEBUG: "true"
+      DEBUG: ${DEBUG:-false}
     ports:
       - "8000:8000"
     volumes:

@@ -18,6 +18,8 @@ from app.schemas.payment import (
     DlpTicketAssignRequest, DlpTicketCompleteRequest, DlpTicketVerifyRequest,
     BlockingIssuesResponse
 )
+from app.core.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -25,7 +27,8 @@ router = APIRouter()
 @router.post("/gates", response_model=PaymentGateResponse)
 async def create_payment_gate(
     request: PaymentGateCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new payment gate for a stage."""
     payment_service = PaymentService(db)
@@ -36,16 +39,15 @@ async def create_payment_gate(
         amount=request.amount,
         description=request.description or ""
     )
-    
-    await db.commit()
-    
+
     return payment
 
 
 @router.get("/gates/project/{project_id}", response_model=List[PaymentGateResponse])
 async def list_payment_gates(
     project_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """List all payment gates for a project."""
     result = await db.execute(
@@ -60,7 +62,8 @@ async def list_payment_gates(
 @router.get("/gates/{payment_id}", response_model=PaymentGateResponse)
 async def get_payment_gate(
     payment_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get payment gate details."""
     result = await db.execute(
@@ -77,14 +80,13 @@ async def get_payment_gate(
 @router.post("/gates/{payment_id}/check-readiness", response_model=PaymentReadinessResponse)
 async def check_payment_readiness(
     payment_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Check if a payment can be released (blocking logic)."""
     payment_service = PaymentService(db)
     can_release, reasons = await payment_service.check_payment_readiness(payment_id)
-    
-    await db.commit()
-    
+
     return PaymentReadinessResponse(
         can_release=can_release,
         reasons=reasons,
@@ -96,7 +98,8 @@ async def check_payment_readiness(
 async def request_payment_release(
     payment_id: str,
     request: PaymentRequestRelease,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Request payment release."""
     payment_service = PaymentService(db)
@@ -107,9 +110,7 @@ async def request_payment_release(
     
     if not success:
         raise HTTPException(status_code=400, detail=message)
-    
-    await db.commit()
-    
+
     return PaymentRequestResponse(
         success=True,
         message=message,
@@ -121,7 +122,8 @@ async def request_payment_release(
 async def approve_payment(
     payment_id: str,
     request: PaymentApproveRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Approve a payment for release."""
     payment_service = PaymentService(db)
@@ -132,9 +134,7 @@ async def approve_payment(
     
     if not success:
         raise HTTPException(status_code=400, detail=message)
-    
-    await db.commit()
-    
+
     result = await db.execute(
         select(PaymentGate).where(PaymentGate.id == payment_id)
     )
@@ -150,7 +150,8 @@ async def approve_payment(
 @router.post("/gates/{payment_id}/release")
 async def release_payment(
     payment_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Mark payment as released (funds transferred)."""
     payment_service = PaymentService(db)
@@ -158,16 +159,15 @@ async def release_payment(
     
     if not success:
         raise HTTPException(status_code=400, detail=message)
-    
-    await db.commit()
-    
+
     return {"success": True, "message": message}
 
 
 @router.get("/gates/{payment_id}/blocking-issues")
 async def get_blocking_issues(
     payment_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get detailed blocking issues for a payment."""
     payment_service = PaymentService(db)
@@ -200,7 +200,8 @@ async def get_blocking_issues(
 @router.get("/summary/project/{project_id}")
 async def get_payment_summary(
     project_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get payment summary for a project."""
     payment_service = PaymentService(db)
@@ -214,7 +215,8 @@ async def get_payment_summary(
 @router.post("/tickets", response_model=DlpTicketResponse)
 async def create_dlp_ticket(
     request: DlpTicketCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new DLP (Defect Liability Period) ticket."""
     payment_service = PaymentService(db)
@@ -231,9 +233,7 @@ async def create_dlp_ticket(
         defect_category=request.defect_category,
         reported_by=request.reported_by
     )
-    
-    await db.commit()
-    
+
     return ticket
 
 
@@ -242,7 +242,8 @@ async def list_dlp_tickets(
     project_id: str,
     status: Optional[str] = None,
     priority: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """List DLP tickets for a project."""
     query = select(DlpTicket).where(DlpTicket.project_id == project_id)
@@ -260,7 +261,8 @@ async def list_dlp_tickets(
 @router.get("/tickets/{ticket_id}", response_model=DlpTicketResponse)
 async def get_dlp_ticket(
     ticket_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get DLP ticket details."""
     result = await db.execute(
@@ -278,7 +280,8 @@ async def get_dlp_ticket(
 async def assign_ticket(
     ticket_id: str,
     request: DlpTicketAssignRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Assign a DLP ticket to a contractor."""
     payment_service = PaymentService(db)
@@ -290,9 +293,7 @@ async def assign_ticket(
     
     if not success:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    
-    await db.commit()
-    
+
     return {"success": True, "message": "Ticket assigned"}
 
 
@@ -300,7 +301,8 @@ async def assign_ticket(
 async def complete_ticket(
     ticket_id: str,
     request: DlpTicketCompleteRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Mark a ticket as completed (pending verification)."""
     payment_service = PaymentService(db)
@@ -312,9 +314,7 @@ async def complete_ticket(
     
     if not success:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    
-    await db.commit()
-    
+
     return {"success": True, "message": "Ticket marked as complete"}
 
 
@@ -322,7 +322,8 @@ async def complete_ticket(
 async def verify_ticket(
     ticket_id: str,
     request: DlpTicketVerifyRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Verify a completed ticket."""
     payment_service = PaymentService(db)
@@ -334,9 +335,7 @@ async def verify_ticket(
     
     if not success:
         raise HTTPException(status_code=404, detail="Ticket not found")
-    
-    await db.commit()
-    
+
     status_msg = "closed" if request.accepted else "reopened"
     return {"success": True, "message": f"Ticket {status_msg}"}
 
@@ -344,7 +343,8 @@ async def verify_ticket(
 @router.get("/tickets/project/{project_id}/summary")
 async def get_tickets_summary(
     project_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get DLP tickets summary for a project."""
     result = await db.execute(
