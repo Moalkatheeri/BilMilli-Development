@@ -1,12 +1,12 @@
 import { motion } from 'framer-motion';
-import { Shield, Bell, Menu, X, Building2, MapPin } from 'lucide-react';
+import { Shield, Bell, Menu, X, Building2, MapPin, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useProjectStore } from '@/store/projectStore';
 
 export function Header() {
-  const { project, notifications, sidebarOpen, toggleSidebar } = useProjectStore();
+  const { project, notifications, sidebarOpen, toggleSidebar, user, logout, setActiveTab } = useProjectStore();
   
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -73,13 +73,17 @@ export function Header() {
             )}
           </Button>
           
-          {project?.homeowner && (
-            <Avatar className="h-9 w-9 border-2 border-blue-100">
+          {user && (
+            <Avatar className="h-9 w-9 border-2 border-blue-100 cursor-pointer" onClick={() => setActiveTab('overview')}>
               <AvatarFallback className="bg-blue-600 text-white text-sm font-medium">
-                {project.homeowner.name.split(' ').map(n => n[0]).join('')}
+                {(user.full_name || user.email || '?').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
           )}
+
+          <Button variant="ghost" size="icon" onClick={logout} title="Sign out">
+            <LogOut className="h-5 w-5 text-slate-600" />
+          </Button>
         </div>
       </div>
     </header>

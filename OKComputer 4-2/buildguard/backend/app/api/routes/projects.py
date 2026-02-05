@@ -4,7 +4,7 @@ Projects API - Pillar 1: Project & Stage Lifecycle
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import List, Optional
 import json
 
@@ -51,23 +51,30 @@ async def create_project(
     return project
 
 
-@router.get("/", response_model=List[ProjectListResponse])
+@router.get("/")
 async def list_projects(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 50,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """List all projects."""
+    """List all projects the user has access to."""
+    user_project_ids = current_user.project_ids or []
+    # Allow admins to see all projects
+    base_filter = Project.id.in_(user_project_ids) if current_user.role.value != "admin" else True
+
+    count_result = await db.execute(select(func.count(Project.id)).where(base_filter))
+    total = count_result.scalar() or 0
+
     result = await db.execute(
         select(Project)
-        .where(Project.id.in_(current_user.project_ids))
+        .where(base_filter)
         .order_by(Project.created_at.desc())
         .offset(skip)
         .limit(limit)
     )
     projects = result.scalars().all()
-    return projects
+    return {"items": projects, "total": total}
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)

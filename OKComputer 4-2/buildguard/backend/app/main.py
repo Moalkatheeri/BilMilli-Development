@@ -10,7 +10,11 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
+from app.core.logging_config import setup_logging
 from app.core.database import engine, Base
+
+# Configure structured logging before anything else
+setup_logging(debug=settings.debug)
 from app.core.exceptions import (
     ProjectNotFoundError, StageNotReadyError,
     PaymentBlockedError, UnauthorizedError,

@@ -151,7 +151,7 @@ export interface ProjectListItem {
 }
 
 export const projectsApi = {
-  list: () => fetchApi<ProjectListItem[]>('/projects/'),
+  list: () => fetchApi<{ items: ProjectListItem[]; total: number }>('/projects/'),
   get: (id: string) => fetchApi<ProjectResponse>(`/projects/${id}`),
   create: (data: {
     name: string;

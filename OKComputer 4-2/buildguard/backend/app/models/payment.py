@@ -32,16 +32,16 @@ class PaymentGate(Base):
     __tablename__ = "payment_gates"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
     stage_id = Column(String, ForeignKey("construction_stages.id"), nullable=False)
-    
+
     # Payment details
     amount = Column(Float, default=0.0)
     currency = Column(String, default="AED")
     description = Column(Text, nullable=True)
-    
+
     # Status
-    status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING)
+    status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING, index=True)
     
     # Blocking conditions
     block_reasons = Column(JSON, default=list)  # ["critical_deviations", "open_defects"]
@@ -58,9 +58,9 @@ class PaymentGate(Base):
     # Relations
     project = relationship("Project", back_populates="payments")
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     def can_release(self) -> tuple[bool, list[str]]:
         """Check if payment can be released. Returns (can_release, reasons)."""
         reasons = []
@@ -78,8 +78,8 @@ class DlpTicket(Base):
     __tablename__ = "dlp_tickets"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
-    
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
+
     # Location
     room_id = Column(String, nullable=True)  # ID of room in 3D model
     room_name = Column(String, nullable=True)  # "Kitchen", "Master Bedroom", etc.
@@ -90,7 +90,7 @@ class DlpTicket(Base):
     title = Column(String, nullable=False)
     description = Column(Text, nullable=False)
     priority = Column(Enum(TicketPriority), default=TicketPriority.MEDIUM)
-    status = Column(Enum(TicketStatus), default=TicketStatus.OPEN)
+    status = Column(Enum(TicketStatus), default=TicketStatus.OPEN, index=True)
     
     # Defect classification
     defect_category = Column(String, nullable=True)  # "waterproofing", "finishes", "mechanical", etc.
@@ -120,5 +120,5 @@ class DlpTicket(Base):
     contractor_notes = Column(Text, nullable=True)
     owner_notes = Column(Text, nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

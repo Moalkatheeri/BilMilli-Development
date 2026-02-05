@@ -98,7 +98,9 @@ services:
 
   # Frontend (React)
   frontend:
-    build: ./frontend
+    build:
+      context: ..
+      dockerfile: buildguard/frontend/Dockerfile
     container_name: buildguard-frontend
     ports:
       - "3000:80"

@@ -255,8 +255,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   loadProjects: async () => {
     set({ loading: true, error: null });
     try {
-      const projects = await projectsApi.list();
-      set({ projects, loading: false });
+      const res = await projectsApi.list();
+      const items = res.items ?? (res as any);
+      set({ projects: Array.isArray(items) ? items : [], loading: false });
     } catch (err) {
       set({ error: err instanceof ApiError ? err.message : 'Failed to load projects', loading: false });
     }

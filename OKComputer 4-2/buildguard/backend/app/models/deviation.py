@@ -24,8 +24,8 @@ class DeviationEvent(Base):
     __tablename__ = "deviation_events"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
-    
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
+
     # What was detected
     element_type = Column(String, nullable=False)  # "wall", "column", "beam", "window", etc.
     element_id = Column(String, nullable=False)  # ID from 3D model
@@ -33,7 +33,7 @@ class DeviationEvent(Base):
     
     # Deviation details
     deviation_type = Column(String, nullable=False)  # "position", "dimension", "orientation", "missing"
-    severity = Column(Enum(DeviationSeverity), default=DeviationSeverity.MINOR)
+    severity = Column(Enum(DeviationSeverity), default=DeviationSeverity.MINOR, index=True)
     
     # Expected vs Actual
     expected_position = Column(JSON, nullable=True)  # {x, y, z} in meters
@@ -56,7 +56,7 @@ class DeviationEvent(Base):
     photo_id = Column(String, ForeignKey("photo_captures.id"), nullable=True)
     
     # Status workflow
-    status = Column(Enum(DeviationStatus), default=DeviationStatus.DETECTED)
+    status = Column(Enum(DeviationStatus), default=DeviationStatus.DETECTED, index=True)
     assigned_to = Column(String, nullable=True)  # User/contractor ID
     
     # Review notes
@@ -76,5 +76,5 @@ class DeviationEvent(Base):
     # Relations
     project = relationship("Project", back_populates="deviations")
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

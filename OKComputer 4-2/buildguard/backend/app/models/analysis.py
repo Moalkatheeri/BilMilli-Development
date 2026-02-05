@@ -53,8 +53,8 @@ class ThermalAnalysis(Base):
     __tablename__ = "thermal_analyses"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
-    
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
+
     # Configuration
     name = Column(String, default="Thermal Analysis")
     location = Column(String, nullable=False)  # "Dubai", "Abu Dhabi", etc.
@@ -84,5 +84,5 @@ class ThermalAnalysis(Base):
     project = relationship("Project", back_populates="thermal_analyses")
     zones = relationship("ThermalZone", back_populates="analysis", cascade="all, delete-orphan")
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     completed_at = Column(DateTime, nullable=True)

@@ -23,5 +23,5 @@ class User(Base):
     project_ids = Column(JSON, default=list)  # list of project IDs user can access
     is_active = Column(Boolean, default=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

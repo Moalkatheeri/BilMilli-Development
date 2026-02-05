@@ -150,30 +150,48 @@ async def upload_photo_file(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Upload a photo file."""
+    """Upload a photo file to MinIO."""
+    import logging
+    from app.core.storage import upload_file, get_presigned_url
+
+    logger = logging.getLogger("buildguard.captures")
     capture_service = CaptureService(db)
-    
+
     # Start upload
     await capture_service.start_upload(photo_id)
-    
-    # In production: Upload to MinIO/S3
-    # For now, simulate successful upload
-    file_path = f"/uploads/{photo_id}/{file.filename}"
-    
-    # Complete upload
+
     file_content = await file.read()
+    content_type = file.content_type or "image/jpeg"
+    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
+    object_name = f"photos/{photo_id}.{ext}"
+
+    try:
+        await upload_file(file_content, object_name, content_type=content_type)
+    except Exception as exc:
+        logger.error("MinIO upload failed for %s: %s", photo_id, exc)
+        await capture_service.fail_upload(photo_id, str(exc))
+        raise HTTPException(status_code=500, detail="Photo upload failed")
+
+    # Complete upload – store the MinIO object key
     await capture_service.complete_upload(
         photo_id=photo_id,
-        file_path=file_path,
-        file_size=len(file_content)
+        file_path=object_name,
+        file_size=len(file_content),
     )
+
+    # Return a pre-signed URL for immediate display
+    try:
+        url = get_presigned_url(object_name)
+    except Exception:
+        url = None
 
     return {
         "success": True,
         "message": "Photo uploaded successfully",
         "photo_id": photo_id,
-        "file_path": file_path,
-        "file_size": len(file_content)
+        "file_path": object_name,
+        "file_size": len(file_content),
+        "url": url,
     }
 
 
@@ -255,6 +273,30 @@ async def get_sync_status(
         failed_photos=failed,
         is_complete=uploaded == total and total > 0
     )
+
+
+@router.get("/photos/{photo_id}/url")
+async def get_photo_url(
+    photo_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a pre-signed URL for a photo stored in MinIO."""
+    from app.core.storage import get_presigned_url
+
+    result = await db.execute(
+        select(PhotoCapture).where(PhotoCapture.id == photo_id)
+    )
+    photo = result.scalar_one_or_none()
+    if not photo or not photo.file_path:
+        raise HTTPException(status_code=404, detail="Photo not found or not yet uploaded")
+
+    try:
+        url = get_presigned_url(photo.file_path)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to generate download URL")
+
+    return {"photo_id": photo_id, "url": url}
 
 
 @router.get("/pending-uploads")
