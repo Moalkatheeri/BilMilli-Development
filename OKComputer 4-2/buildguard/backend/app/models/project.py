@@ -42,15 +42,15 @@ class Project(Base):
     deviations = relationship("DeviationEvent", back_populates="project")
     payments = relationship("PaymentGate", back_populates="project")
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class ConstructionStage(Base):
     __tablename__ = "construction_stages"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
-    
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
+
     # Stage definition
     name = Column(String, nullable=False)
     description = Column(Text)
@@ -58,7 +58,7 @@ class ConstructionStage(Base):
     phase = Column(String, nullable=False)  # foundation, structure, mep, finishes, etc.
     
     # Status
-    status = Column(Enum(StageStatus), default=StageStatus.NOT_STARTED)
+    status = Column(Enum(StageStatus), default=StageStatus.NOT_STARTED, index=True)
     completion_percentage = Column(Float, default=0.0)
     
     # Timeline
@@ -83,9 +83,9 @@ class ConstructionStage(Base):
     project = relationship("Project", back_populates="stages")
     captures = relationship("CaptureSession", back_populates="stage")
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     def can_start(self) -> bool:
         """Check if this stage can be started (all dependencies approved)"""
         # This will be checked by StageManager service

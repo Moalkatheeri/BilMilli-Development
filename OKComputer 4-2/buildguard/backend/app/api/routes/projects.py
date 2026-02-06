@@ -4,12 +4,14 @@ Projects API - Pillar 1: Project & Stage Lifecycle
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from typing import List, Optional
 import json
 
 from app.core.database import get_db
+from app.core.auth import get_current_user
 from app.models.project import Project, ConstructionStage
+from app.models.user import User
 from app.services.stage_manager import StageManager
 from app.schemas.project import (
     ProjectCreate, ProjectUpdate, ProjectResponse, 
@@ -22,6 +24,7 @@ router = APIRouter()
 @router.post("/", response_model=ProjectResponse)
 async def create_project(
     project_data: ProjectCreate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new project with auto-generated construction stages."""
@@ -37,36 +40,47 @@ async def create_project(
     
     db.add(project)
     await db.flush()
-    
+
     # Auto-generate construction stages
     stage_manager = StageManager(db)
     await stage_manager.create_stages_for_project(project)
-    
-    await db.commit()
-    
+
+    # Add project to user's accessible projects
+    current_user.project_ids = [*current_user.project_ids, project.id]
+
     return project
 
 
-@router.get("/", response_model=List[ProjectListResponse])
+@router.get("/")
 async def list_projects(
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """List all projects."""
+    """List all projects the user has access to."""
+    user_project_ids = current_user.project_ids or []
+    # Allow admins to see all projects
+    base_filter = Project.id.in_(user_project_ids) if current_user.role.value != "admin" else True
+
+    count_result = await db.execute(select(func.count(Project.id)).where(base_filter))
+    total = count_result.scalar() or 0
+
     result = await db.execute(
         select(Project)
+        .where(base_filter)
         .order_by(Project.created_at.desc())
         .offset(skip)
         .limit(limit)
     )
     projects = result.scalars().all()
-    return projects
+    return {"items": projects, "total": total}
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get project details with stages."""
@@ -85,6 +99,7 @@ async def get_project(
 async def update_project(
     project_id: str,
     project_data: ProjectUpdate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Update project details."""
@@ -99,16 +114,17 @@ async def update_project(
     update_data = project_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(project, field, value)
-    
-    await db.commit()
+
+    await db.flush()
     await db.refresh(project)
-    
+
     return project
 
 
 @router.delete("/{project_id}")
 async def delete_project(
     project_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Delete a project and all associated data."""
@@ -121,8 +137,7 @@ async def delete_project(
         raise HTTPException(status_code=404, detail="Project not found")
     
     await db.delete(project)
-    await db.commit()
-    
+
     return {"success": True, "message": "Project deleted"}
 
 
@@ -130,6 +145,7 @@ async def delete_project(
 async def upload_model(
     project_id: str,
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Upload a 3D model (IFC/OBJ) for the project."""
@@ -163,8 +179,6 @@ async def upload_model(
     project.model_url = f"/models/{project_id}/{file.filename}"
     project.model_metadata = model_metadata
     
-    await db.commit()
-    
     return ModelUploadResponse(
         success=True,
         message="Model uploaded and parsed successfully",
@@ -176,6 +190,7 @@ async def upload_model(
 @router.get("/{project_id}/progress")
 async def get_project_progress(
     project_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get detailed project progress."""

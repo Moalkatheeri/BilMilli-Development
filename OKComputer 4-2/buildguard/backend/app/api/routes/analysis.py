@@ -17,6 +17,8 @@ from app.schemas.analysis import (
     AnalysisRunResponse, AnalysisListResponse,
     CoolingLoadSummary, ClimateDataResponse, ThermalZoneResponse
 )
+from app.core.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -24,7 +26,8 @@ router = APIRouter()
 @router.post("/", response_model=ThermalAnalysisResponse)
 async def create_analysis(
     request: ThermalAnalysisCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Create a new thermal analysis for a project."""
     # Verify project exists
@@ -42,16 +45,15 @@ async def create_analysis(
         location=request.location,
         design_temperature=request.design_temperature
     )
-    
-    await db.commit()
-    
+
     return analysis
 
 
 @router.get("/", response_model=List[ThermalAnalysisResponse])
 async def list_analyses(
     project_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """List all thermal analyses for a project."""
     result = await db.execute(
@@ -66,7 +68,8 @@ async def list_analyses(
 @router.get("/{analysis_id}", response_model=ThermalAnalysisResponse)
 async def get_analysis(
     analysis_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get thermal analysis details with zones."""
     result = await db.execute(
@@ -83,14 +86,13 @@ async def get_analysis(
 @router.post("/{analysis_id}/run", response_model=AnalysisRunResponse)
 async def run_analysis(
     analysis_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Run the thermal analysis calculation."""
     engine = ThermalAnalysisEngine(db)
     success, message = await engine.run_analysis(analysis_id)
-    
-    await db.commit()
-    
+
     if not success:
         raise HTTPException(status_code=400, detail=message)
     
@@ -104,7 +106,8 @@ async def run_analysis(
 @router.get("/{analysis_id}/zones", response_model=List[ThermalZoneResponse])
 async def get_analysis_zones(
     analysis_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get all thermal zones for an analysis."""
     result = await db.execute(
@@ -117,7 +120,8 @@ async def get_analysis_zones(
 @router.get("/{analysis_id}/summary")
 async def get_analysis_summary(
     analysis_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get cooling load summary for an analysis."""
     result = await db.execute(
@@ -159,7 +163,7 @@ async def get_analysis_summary(
 
 
 @router.get("/climate-data/{location}")
-async def get_climate_data(location: str):
+async def get_climate_data(location: str, current_user: User = Depends(get_current_user)):
     """Get climate data for a location."""
     location_key = location.lower().replace(" ", "_")
     data = CLIMATE_DATA.get(location_key)
@@ -174,7 +178,7 @@ async def get_climate_data(location: str):
 
 
 @router.get("/climate-data/locations/list")
-async def list_climate_locations():
+async def list_climate_locations(current_user: User = Depends(get_current_user)):
     """List all available climate data locations."""
     return {
         "locations": [
@@ -187,7 +191,8 @@ async def list_climate_locations():
 @router.delete("/{analysis_id}")
 async def delete_analysis(
     analysis_id: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Delete a thermal analysis."""
     result = await db.execute(
@@ -199,6 +204,5 @@ async def delete_analysis(
         raise HTTPException(status_code=404, detail="Analysis not found")
     
     await db.delete(analysis)
-    await db.commit()
-    
+
     return {"success": True, "message": "Analysis deleted"}

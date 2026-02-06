@@ -9,6 +9,8 @@ from sqlalchemy import select
 from typing import List, Optional
 
 from app.core.database import get_db
+from app.core.auth import get_current_user
+from app.models.user import User
 from app.models.capture import CaptureSession, PhotoCapture, PhotoMetadata, CaptureStatus
 from app.services.capture_service import CaptureService
 from app.schemas.capture import (
@@ -24,6 +26,7 @@ router = APIRouter()
 @router.post("/sessions", response_model=CaptureSessionResponse)
 async def create_capture_session(
     request: CaptureSessionCreate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new capture session for field photos."""
@@ -37,15 +40,14 @@ async def create_capture_session(
         captured_by=request.captured_by,
         is_offline=request.is_offline
     )
-    
-    await db.commit()
-    
+
     return session
 
 
 @router.get("/sessions/{session_id}", response_model=CaptureSessionResponse)
 async def get_capture_session(
     session_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get capture session details."""
@@ -63,6 +65,7 @@ async def get_capture_session(
 @router.get("/sessions/project/{project_id}", response_model=List[CaptureSessionResponse])
 async def list_capture_sessions(
     project_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """List all capture sessions for a project."""
@@ -80,6 +83,7 @@ async def create_photo_capture(
     session_id: str,
     file_size: int = 0,
     file_type: str = "image/jpeg",
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new photo capture entry."""
@@ -90,9 +94,7 @@ async def create_photo_capture(
         file_size=file_size,
         file_type=file_type
     )
-    
-    await db.commit()
-    
+
     return photo
 
 
@@ -100,6 +102,7 @@ async def create_photo_capture(
 async def add_photo_metadata(
     photo_id: str,
     request: PhotoMetadataCreate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Add GPS, compass, and AR pose metadata to a photo."""
@@ -136,9 +139,7 @@ async def add_photo_metadata(
     if request.anchored_element_id:
         metadata.anchored_element_id = request.anchored_element_id
         metadata.anchor_confidence = request.anchor_confidence
-    
-    await db.commit()
-    
+
     return metadata
 
 
@@ -146,40 +147,58 @@ async def add_photo_metadata(
 async def upload_photo_file(
     photo_id: str,
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Upload a photo file."""
+    """Upload a photo file to MinIO."""
+    import logging
+    from app.core.storage import upload_file, get_presigned_url
+
+    logger = logging.getLogger("buildguard.captures")
     capture_service = CaptureService(db)
-    
+
     # Start upload
     await capture_service.start_upload(photo_id)
-    
-    # In production: Upload to MinIO/S3
-    # For now, simulate successful upload
-    file_path = f"/uploads/{photo_id}/{file.filename}"
-    
-    # Complete upload
+
     file_content = await file.read()
+    content_type = file.content_type or "image/jpeg"
+    ext = file.filename.rsplit(".", 1)[-1] if file.filename and "." in file.filename else "jpg"
+    object_name = f"photos/{photo_id}.{ext}"
+
+    try:
+        await upload_file(file_content, object_name, content_type=content_type)
+    except Exception as exc:
+        logger.error("MinIO upload failed for %s: %s", photo_id, exc)
+        await capture_service.fail_upload(photo_id, str(exc))
+        raise HTTPException(status_code=500, detail="Photo upload failed")
+
+    # Complete upload – store the MinIO object key
     await capture_service.complete_upload(
         photo_id=photo_id,
-        file_path=file_path,
-        file_size=len(file_content)
+        file_path=object_name,
+        file_size=len(file_content),
     )
-    
-    await db.commit()
-    
+
+    # Return a pre-signed URL for immediate display
+    try:
+        url = get_presigned_url(object_name)
+    except Exception:
+        url = None
+
     return {
         "success": True,
         "message": "Photo uploaded successfully",
         "photo_id": photo_id,
-        "file_path": file_path,
-        "file_size": len(file_content)
+        "file_path": object_name,
+        "file_size": len(file_content),
+        "url": url,
     }
 
 
 @router.get("/sessions/{session_id}/photos", response_model=List[PhotoWithMetadataResponse])
 async def get_session_photos(
     session_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get all photos in a session with metadata."""
@@ -191,6 +210,7 @@ async def get_session_photos(
 @router.post("/sessions/{session_id}/sync-start")
 async def start_sync(
     session_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Start sync for an offline capture session."""
@@ -199,15 +219,14 @@ async def start_sync(
     
     if not success:
         raise HTTPException(status_code=404, detail="Capture session not found")
-    
-    await db.commit()
-    
+
     return {"success": True, "message": "Sync started"}
 
 
 @router.post("/sessions/{session_id}/sync-complete")
 async def complete_sync(
     session_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Complete sync for a capture session."""
@@ -216,15 +235,14 @@ async def complete_sync(
     
     if not success:
         raise HTTPException(status_code=404, detail="Capture session not found")
-    
-    await db.commit()
-    
+
     return {"success": True, "message": "Sync completed"}
 
 
 @router.get("/sessions/{session_id}/sync-status", response_model=SyncStatusResponse)
 async def get_sync_status(
     session_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get sync status for a capture session."""
@@ -257,9 +275,34 @@ async def get_sync_status(
     )
 
 
+@router.get("/photos/{photo_id}/url")
+async def get_photo_url(
+    photo_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a pre-signed URL for a photo stored in MinIO."""
+    from app.core.storage import get_presigned_url
+
+    result = await db.execute(
+        select(PhotoCapture).where(PhotoCapture.id == photo_id)
+    )
+    photo = result.scalar_one_or_none()
+    if not photo or not photo.file_path:
+        raise HTTPException(status_code=404, detail="Photo not found or not yet uploaded")
+
+    try:
+        url = get_presigned_url(photo.file_path)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to generate download URL")
+
+    return {"photo_id": photo_id, "url": url}
+
+
 @router.get("/pending-uploads")
 async def get_pending_uploads(
     session_id: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Get photos pending upload (for offline queue processing)."""

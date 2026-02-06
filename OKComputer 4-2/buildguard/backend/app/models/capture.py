@@ -18,7 +18,7 @@ class PhotoCapture(Base):
     __tablename__ = "photo_captures"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    session_id = Column(String, ForeignKey("capture_sessions.id"), nullable=False)
+    session_id = Column(String, ForeignKey("capture_sessions.id"), nullable=False, index=True)
     
     # File storage
     file_path = Column(String, nullable=True)  # Path in MinIO
@@ -33,7 +33,7 @@ class PhotoCapture(Base):
     session = relationship("CaptureSession", back_populates="photos")
     metadata = relationship("PhotoMetadata", back_populates="photo", uselist=False)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     uploaded_at = Column(DateTime, nullable=True)
 
 class PhotoMetadata(Base):
@@ -78,7 +78,7 @@ class CaptureSession(Base):
     __tablename__ = "capture_sessions"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id = Column(String, ForeignKey("projects.id"), nullable=False)
+    project_id = Column(String, ForeignKey("projects.id"), nullable=False, index=True)
     stage_id = Column(String, ForeignKey("construction_stages.id"), nullable=False)
     
     # Session info
@@ -99,5 +99,5 @@ class CaptureSession(Base):
     stage = relationship("ConstructionStage", back_populates="captures")
     photos = relationship("PhotoCapture", back_populates="session")
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
