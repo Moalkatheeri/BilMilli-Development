@@ -1,0 +1,21 @@
+# BuildGuard Pro - Development Override
+# This file adds hot-reload for development
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+
+version: '3.8'
+
+services:
+  backend:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/tests:/app/tests
+
+  pro-backend:
+    environment:
+      - DEBUG=true
+    volumes:
+      - ../buildguard-pro-backend/app:/app/app
