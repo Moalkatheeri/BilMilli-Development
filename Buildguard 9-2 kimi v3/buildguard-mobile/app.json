@@ -1,0 +1,94 @@
+{
+  "expo": {
+    "name": "BuildGuard Pro",
+    "slug": "buildguard-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A1628"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.buildguard.app",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "NSCameraUsageDescription": "BuildGuard Pro needs access to your camera to capture construction photos with AR overlay and GPS metadata.",
+        "NSLocationWhenInUseUsageDescription": "BuildGuard Pro needs access to your location to tag photos with GPS coordinates and provide site proximity information.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "BuildGuard Pro needs access to your location for continuous tracking during site visits.",
+        "NSPhotoLibraryUsageDescription": "BuildGuard Pro needs access to your photo library to save construction documentation.",
+        "NSMotionUsageDescription": "BuildGuard Pro uses motion sensors to capture device orientation for AR features."
+      }
+    },
+    "android": {
+      "package": "com.buildguard.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A1628"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.HIGH_SAMPLING_RATE_SENSORS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow BuildGuard Pro to access your camera to capture construction photos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow BuildGuard Pro to use your location for photo geotagging and site proximity."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow BuildGuard Pro to access your photos to save construction documentation.",
+          "savePhotosPermission": "Allow BuildGuard Pro to save photos to your gallery.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      [
+        "expo-secure-store"
+      ],
+      [
+        "@react-native-community/netinfo"
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "buildguard-pro"
+      },
+      "apiBaseUrl": {
+        "development": "http://localhost:8000/api",
+        "simulator": "http://localhost:8000/api",
+        "preview": "https://api-staging.buildguard.pro/api",
+        "production": "https://api.buildguard.pro/api"
+      }
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    }
+  }
+}
